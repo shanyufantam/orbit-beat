@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orbit Beat</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    color: #fff; font: 16px system-ui, sans-serif;
+    background: radial-gradient(circle at center, #30205c, #090b1d 70%);
+  }
+  main { width: min(640px, 92vw); text-align: center; }
+  h1 { margin-bottom: 4px; }
+  p { color: #c8c1e6; }
+  #arena {
+    position: relative; height: 400px; margin: 22px 0;
+    display: grid; place-items: center; overflow: hidden;
+    border: 1px solid #ffffff35; border-radius: 22px;
+    background: radial-gradient(circle, #211740, #101126);
+    cursor: pointer; touch-action: manipulation;
+  }
+  canvas { width: 100%; height: 100%; }
+  #message {
+    position: absolute; padding: 20px; border-radius: 16px;
+    background: #090b1ddd; line-height: 1.6;
+  }
+  button {
+    border: 0; border-radius: 10px; padding: 11px 18px;
+    background: linear-gradient(90deg, #ff91d4, #91eaff);
+    font-weight: 700; cursor: pointer;
+  }
+  #score { color: #91eaff; font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+  <h1>✦ Orbit Beat</h1>
+  <p>Tap when your comet reaches the glowing star.</p>
+  <p>Score: <span id="score">0</span> · Best combo: <span id="combo">0</span>× · Time: <span id="time">30</span>s</p>
+  <div id="arena">
+    <canvas id="canvas"></canvas>
+    <div id="message">
+      <strong id="title">Ready to orbit?</strong><br>
+      Catch the star for points. Keep your streak going!<br><br>
+      <button id="start">Start game</button>
+    </div>
+  </div>
+  <p>Press <b>Space</b> or click/tap the arena to catch the beat.</p>
+</main>
+<script>
+const canvas = document.querySelector("#canvas");
+const ctx = canvas.getContext("2d");
+const arena = document.querySelector("#arena");
+const message = document.querySelector("#message");
+const scoreText = document.querySelector("#score");
+const comboText = document.querySelector("#combo");
+const timeText = document.querySelector("#time");
+
+let width, height, angle = -Math.PI / 2;
+let score = 0, combo = 0, best = 0, seconds = 30;
+let playing = false, lastFrame = 0;
+const target = -Math.PI / 2;
+
+function resize() {
+  const box = arena.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = box.width * scale;
+  canvas.height = box.height * scale;
+  width = box.width;
+  height = box.height;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+function drawStar(x, y, outer, inner) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const radius = i % 2 ? inner : outer;
+    const a = i * Math.PI / 5 - Math.PI / 2;
+    ctx.lineTo(x + Math.cos(a) * radius, y + Math.sin(a) * radius);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function frame(now) {
+  const dt = Math.min((now - lastFrame) / 1000, 0.05);
+  lastFrame = now;
+  ctx.clearRect(0, 0, width, height);
+
+  const cx = width / 2, cy = height / 2;
+  const radius = Math.min(width, height) * 0.32;
+
+  for (let i = 0; i < 40; i++) {
+    const x = (i * 97) % width, y = (i * 173) % height;
+    ctx.fillStyle = i % 3 ? "#ffffff66" : "#9cecff";
+    ctx.fillRect(x, y, 2, 2);
+  }
+
+  ctx.strokeStyle = "#ffffff35";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, radius, radius * 0.65, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const planet = ctx.createRadialGradient(cx - 10, cy - 12, 2, cx, cy, 36);
+  planet.addColorStop(0, "#ffd0f0");
+  planet.addColorStop(1, "#7855dc");
+  ctx.fillStyle = planet;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 36, 0, Math.PI * 2);
+  ctx.fill();
+
+  const tx = cx + Math.cos(target) * radius;
+  const ty = cy + Math.sin(target) * radius * 0.65;
+  ctx.fillStyle = "#8ff1ff";
+  ctx.shadowColor = "#8ff1ff";
+  ctx.shadowBlur = 22;
+  drawStar(tx, ty, 15, 7);
+  ctx.shadowBlur = 0;
+
+  const x = cx + Math.cos(angle) * radius;
+  const y = cy + Math.sin(angle) * radius * 0.65;
+  ctx.fillStyle = "#ff91d4";
+  ctx.shadowColor = "#ff91d4";
+  ctx.shadowBlur = 20;
+  ctx.beginPath();
+  ctx.arc(x, y, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  if (playing) {
+    angle += dt * 1.7;
+    seconds -= dt;
+    timeText.textContent = Math.max(0, Math.ceil(seconds));
+    if (seconds <= 0) finish();
+  }
+
+  requestAnimationFrame(frame);
+}
+
+function hit() {
+  if (!playing) return;
+  const difference = Math.abs(Math.atan2(
+    Math.sin(angle - target), Math.cos(angle - target)
+  ));
+  if (difference < 0.3) {
+    combo++;
+    score += difference < 0.1 ? 30 : difference < 0.2 ? 20 : 10;
+    best = Math.max(best, combo);
+  } else {
+    combo = 0;
+  }
+  scoreText.textContent = score;
+  comboText.textContent = best;
+}
+
+function start() {
+  score = 0; combo = 0; best = 0; seconds = 30;
+  angle = target;
+  playing = true;
+  scoreText.textContent = "0";
+  comboText.textContent = "0";
+  timeText.textContent = "30";
+  document.querySelector("#title").textContent = "Catch the beat!";
+  message.style.display = "none";
+}
+
+function finish() {
+  playing = false;
+  message.style.display = "block";
+  document.querySelector("#title").textContent = "Nice flight!";
+  message.innerHTML = `<strong>Nice flight!</strong><br>
+    You scored ${score} points with a best combo of ${best}×.<br><br>
+    <button onclick="start()">Play again</button>`;
+}
+
+document.querySelector("#start").addEventListener("click", start);
+arena.addEventListener("pointerdown", hit);
+window.addEventListener("keydown", event => {
+  if (event.code === "Space") {
+    event.preventDefault();
+    hit();
+  }
+});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
